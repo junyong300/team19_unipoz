@@ -98,21 +98,25 @@ class mpii(data.Dataset):
 
         if is_train == "Train":
             self.img_List = self.train_list
-            print("Train images ",len(self.img_List))
+            # print("Train images ",len(self.img_List))
 
         elif is_train == "Val":
             self.img_List = self.val_list
-            print("Val   images ",len(self.img_List))
+            # print("Val   images ",len(self.img_List))
 
 
     def __getitem__(self, index):
         scale_factor = 0.25
 
+        
         variable = self.anno[self.img_List[index]]
         
-        while not os.path.isfile(self.labels_dir + variable['img_paths'][:-4]+'.png'):
-            index = index - 1
-            variable = self.anno[self.img_List[index]]
+        """ 
+        Fix error of index-1 needs to be edited out. 
+        """
+        # while not os.path.isfile(self.labels_dir + variable['img_paths'][:-4]+'.png'):
+        #     index = index - 1
+        #     variable = self.anno[self.img_List[index]]
 
         img_path  = self.images_dir + variable['img_paths']
         
