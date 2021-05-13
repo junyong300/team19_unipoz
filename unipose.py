@@ -47,7 +47,7 @@ class Trainer(object):
         self.workers      = 1
         self.weight_decay = 0.0005
         self.momentum     = 0.9
-        self.batch_size   = 8
+        self.batch_size   = 4
         self.lr           = 0.0001
         self.gamma        = 0.333
         self.step_size    = 13275
@@ -68,7 +68,7 @@ class Trainer(object):
 
         self.model       = model.cuda()
 
-        self.criterion   = nn.MSELoss().cuda()
+        self.criterion   = nn.MSELoss()
 
         self.optimizer   = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
@@ -77,9 +77,9 @@ class Trainer(object):
         self.iters       = 0
 
         if self.args.pretrained is not None:
-            checkpoint = torch.load(self.args.pretrained)
-            p = checkpoint['state_dict']
-
+            # checkpoint = torch.load(self.args.pretrained)
+            # p = checkpoint['state_dict']
+            p = torch.load(self.args.pretrained)
             state_dict = self.model.state_dict()
             model_dict = {}
 
@@ -119,7 +119,7 @@ class Trainer(object):
 
             loss = loss_heat
 
-            train_loss += loss_heat.item()
+            train_loss += float(loss_heat.item())
 
             loss.backward()
             self.optimizer.step()
@@ -142,66 +142,68 @@ class Trainer(object):
         count = np.zeros(self.numClasses+1)
 
         cnt = 0
-        for i, (input, heatmap, centermap, img_path) in enumerate(tbar):
+        with torch.no_grad():
+            for i, (input, heatmap, centermap, img_path) in enumerate(tbar):
 
-            cnt += 1
+                cnt += 1
 
-            input_var     =      input.cuda()
-            heatmap_var   =    heatmap.cuda()
-            self.optimizer.zero_grad()
+                input_var     =      input.cuda()
+                heatmap_var   =    heatmap.cuda()
+                self.optimizer.zero_grad()
 
-            heat = self.model(input_var)
-            loss_heat   = self.criterion(heat,  heatmap_var)
+                heat = self.model(input_var)
+                loss_heat   = self.criterion(heat,  heatmap_var)
 
-            loss = loss_heat
+                loss = loss_heat
 
-            val_loss += loss_heat.item()
+                val_loss += loss_heat.item()
 
-            tbar.set_description('Val   loss: %.6f' % (val_loss / ((i + 1)*self.batch_size)))
+                tbar.set_description('Val   loss: %.6f' % (val_loss / ((i + 1)*self.batch_size)))
 
-            acc, acc_PCK, acc_PCKh, cnt, pred, visible = evaluate.accuracy(heat.detach().cpu().numpy(), heatmap_var.detach().cpu().numpy(),0.2,0.5, self.dataset)
+                acc, acc_PCK, acc_PCKh, cnt, pred, visible = evaluate.accuracy(heat.detach().cpu().numpy(), heatmap_var.detach().cpu().numpy(),0.2,0.5, self.dataset)
 
-            AP[0]     = (AP[0]  *i + acc[0])      / (i + 1)
-            PCK[0]    = (PCK[0] *i + acc_PCK[0])  / (i + 1)
-            PCKh[0]   = (PCKh[0]*i + acc_PCKh[0]) / (i + 1)
+                AP[0]     = (AP[0]  *i + acc[0])      / (i + 1)
+                PCK[0]    = (PCK[0] *i + acc_PCK[0])  / (i + 1)
+                PCKh[0]   = (PCKh[0]*i + acc_PCKh[0]) / (i + 1)
 
-            for j in range(1,self.numClasses+1):
-                if visible[j] == 1:
-                    AP[j]     = (AP[j]  *count[j] + acc[j])      / (count[j] + 1)
-                    PCK[j]    = (PCK[j] *count[j] + acc_PCK[j])  / (count[j] + 1)
-                    PCKh[j]   = (PCKh[j]*count[j] + acc_PCKh[j]) / (count[j] + 1)
-                    count[j] += 1
+                for j in range(1,self.numClasses+1):
+                    if visible[j] == 1:
+                        AP[j]     = (AP[j]  *count[j] + acc[j])      / (count[j] + 1)
+                        PCK[j]    = (PCK[j] *count[j] + acc_PCK[j])  / (count[j] + 1)
+                        PCKh[j]   = (PCKh[j]*count[j] + acc_PCKh[j]) / (count[j] + 1)
+                        count[j] += 1
 
-            mAP     =   AP[1:].sum()/(self.numClasses)
-            mPCK    =  PCK[1:].sum()/(self.numClasses)
-            mPCKh   = PCKh[1:].sum()/(self.numClasses)
+                mAP     =   AP[1:].sum()/(self.numClasses)
+                mPCK    =  PCK[1:].sum()/(self.numClasses)
+                mPCKh   = PCKh[1:].sum()/(self.numClasses)
 	
-        printAccuracies(mAP, AP, mPCKh, PCKh, mPCK, PCK, self.dataset)
+            printAccuracies(mAP, AP, mPCKh, PCKh, mPCK, PCK, self.dataset)
+                
+            PCKhAvg = PCKh.sum()/(self.numClasses+1)
+            PCKAvg  =  PCK.sum()/(self.numClasses+1)
+
+            if mAP > self.isBest:
+                self.isBest = mAP
+                save_checkpoint({'state_dict': self.model.state_dict()}, self.isBest, self.args.model_name)
+                print("Model saved to "+self.args.model_name)
+
+            if mPCKh > self.bestPCKh:
+                self.bestPCKh = mPCKh
+            if mPCK > self.bestPCK:
+                self.bestPCK = mPCK
+
+            print("Best AP = %.2f%%; PCK = %2.2f%%; PCKh = %2.2f%%" % (self.isBest*100, self.bestPCK*100,self.bestPCKh*100))
             
-        PCKhAvg = PCKh.sum()/(self.numClasses+1)
-        PCKAvg  =  PCK.sum()/(self.numClasses+1)
-
-        if mAP > self.isBest:
-            self.isBest = mAP
-            save_checkpoint({'state_dict': self.model.state_dict()}, self.isBest, self.args.model_name)
-            print("Model saved to "+self.args.model_name)
-
-        if mPCKh > self.bestPCKh:
-            self.bestPCKh = mPCKh
-        if mPCK > self.bestPCK:
-            self.bestPCK = mPCK
-
-        print("Best AP = %.2f%%; PCK = %2.2f%%; PCKh = %2.2f%%" % (self.isBest*100, self.bestPCK*100,self.bestPCKh*100))
 
 
 
-    def test(self,epoch):
+    def test(self,img_path,epoch):
         self.model.eval()
         print("Testing") 
 
         for idx in range(1):
             print(idx,"/",2000)
-            img_path = './mpii/'
+            
 
             center   = [184, 184]
 
@@ -247,15 +249,17 @@ class Trainer(object):
                 cv2.imwrite('samples/heat/unipose'+str(i)+'.png', im_heat)
         
 parser = argparse.ArgumentParser()
-parser.add_argument('--pretrained', default=None,type=str, dest='pretrained')
-parser.add_argument('--dataset', type=str, dest='dataset', default='MPII')
-parser.add_argument('--train_dir',type=str, dest='train_dir', default='./mpii/')
-parser.add_argument('--val_dir', type=str, dest='val_dir', default='./mpii/')
-parser.add_argument('--test_dir', type=str, dest='test_dir', default='./mpii/')
-parser.add_argument('--model_name', default=None, type=str)
-parser.add_argument('--model_arch', default='unipose', type=str)
+parser.add_argument('--pretrained', type=str, dest='pretrained',    default=None)
+# parser.add_argument('--pretrained', type=str, dest='pretrained',    default='unipose_mpii.pth')
 
-starter_epoch =    0
+parser.add_argument('--dataset',    type=str, dest='dataset',       default='MPII')
+parser.add_argument('--train_dir',  type=str, dest='train_dir',     default='./mpii/')
+parser.add_argument('--val_dir',    type=str, dest='val_dir',       default='./mpii/')
+parser.add_argument('--test_dir',   type=str, dest='test_dir',      default='./mpii/')
+parser.add_argument('--model_name', type=str,                       default='unipose')
+parser.add_argument('--model_arch', type=str,                       default='unipose')
+
+starter_epoch =   0
 epochs        =  100
 
 args = parser.parse_args()
@@ -275,4 +279,4 @@ for epoch in range(starter_epoch, epochs):
     trainer.validation(epoch)
 	
 # Uncomment for inference, demo, and samples for the trained model:
-# trainer.test(0)
+# trainer.test('./mpii/images/065687330.jpg',0)
