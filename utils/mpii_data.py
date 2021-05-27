@@ -37,6 +37,39 @@ def transformImage(pt, center, scale, resolution):
     return new_pt[:2].astype(int) + 1
 
 
+
+def bbox_xyxy_to_xywh(xyxy):
+    """Convert bounding boxes from format (xmin, ymin, xmax, ymax) to (x, y, w, h).
+    Parameters
+    ----------
+    xyxy : list, tuple or numpy.ndarray
+        The bbox in format (xmin, ymin, xmax, ymax).
+        If numpy.ndarray is provided, we expect multiple bounding boxes with
+        shape `(N, 4)`.
+    Returns
+    -------
+    tuple or numpy.ndarray
+        The converted bboxes in format (x, y, w, h).
+        If input is numpy.ndarray, return is numpy.ndarray correspondingly.
+    """
+    if isinstance(xyxy, (tuple, list)):
+        if not len(xyxy) == 4:
+            raise IndexError(
+                "Bounding boxes must have 4 elements, given {}".format(len(xyxy)))
+        x1, y1 = xyxy[0], xyxy[1]
+        w, h = xyxy[2] - x1 + 1, xyxy[3] - y1 + 1
+        return (x1, y1, w, h)
+    elif isinstance(xyxy, np.ndarray):
+        if not xyxy.size % 4 == 0:
+            raise IndexError(
+                "Bounding boxes must have n * 4 elements, given {}".format(xyxy.shape))
+        return np.hstack((xyxy[:, :2], xyxy[:, 2:4] - xyxy[:, :2] + 1))
+    else:
+        raise TypeError(
+            'Expect input xywh a list, tuple or numpy.ndarray, given {}'.format(type(xyxy)))
+
+
+
 def crop(img, points, center, scale, resolution):
     upperLeft   = np.array(transformImage([0, 0], center, scale, resolution))
     bottomRight = np.array(transformImage(resolution, center, scale, resolution))
@@ -83,7 +116,7 @@ class mpii(data.Dataset):
         self.full_img_List = {}
         self.numPeople     = []
 
-        with open(os.path.join(self.labels_dir, "mpii_annotations.json")) as anno_file:
+        with open(os.path.join(self.labels_dir, "mpii_new.json")) as anno_file:
             self.anno = json.load(anno_file)
 
         self.train_list = []
@@ -122,43 +155,51 @@ class mpii(data.Dataset):
         
         # BBox was added to the labels by the authors to perform additional training and testing, as referred in the paper.
         # Intentionally left as comment since it is not part of the dataset.
-#         bbox      = np.load(self.labels_dir + "BBOX/" + variable['img_paths'][:-4] + '.npy')
+        # bbox      = np.load(self.labels_dir + "BBOX/" + variable['img_paths'][:-4] + '.npy')
 
+        ''' New bounding box from mpii_new.json'''
+        
+        # print(variable)
+        bbox = variable['bbox']
         points   = torch.Tensor(variable['joint_self'])
-        center   = torch.Tensor(variable['objpos'])
-        scale    = variable['scale_provided']
 
-
-        if center[0] != -1:
-            center[1] = center[1] + 15*scale
-            scale     = scale*1.25
-
-
-        # Single Person
         nParts = points.size(0)
         img    = cv2.imread(img_path)
-#         box    = np.zeros((2,2))
 
-#         for i in range(bbox.shape[0]):
-#             if center[0] > bbox[i,0] and center[0] < bbox[i,2] and\
-#                center[1] > bbox[i,1] and center[1] < bbox[i,3]:
+        if bbox == None:
+            # print("None")            
+            center   = torch.Tensor(variable['objpos'])
+            scale    = variable['scale_provided']
 
-#                upperLeft   = bbox[i,0:2].astype(int)
-#                bottomRight = bbox[i,-2:].astype(int)
-#                box = bbox[i,:]
+            if center[0] != -1:
+                center[1] = center[1] + 15 * scale
+                scale     = scale * 1.25
 
-#                img[:,0:upperLeft[0],:]  = np.ones(img[:,0:upperLeft[0],:].shape) *255
-#                img[0:upperLeft[1],:,:]  = np.ones(img[0:upperLeft[1],:,:].shape) *255
-#                img[:,bottomRight[0]:,:] = np.ones(img[:,bottomRight[0]:,:].shape)*255
-#                img[bottomRight[1]:,:,:] = np.ones(img[bottomRight[1]:,:,:].shape)*255
+        else:
+            # Single Person
+            box    = np.zeros((2,2))
+            bbox = np.array(bbox)
+            bbox = bbox_xyxy_to_xywh(bbox)
+            for i in range(bbox.shape[0]):
+                center   = torch.Tensor(variable['objpos'])
+                scale    = variable['scale_provided']
+                if center[0] > bbox[i,0] and center[0] < bbox[i,2] and \
+                   center[1] > bbox[i,1] and center[1] < bbox[i,3]:
 
-#                break
+                   upperLeft   = bbox[i,0:2].astype(int)
+                   bottomRight = bbox[i,-2:].astype(int)
+                   box = bbox[i,:]
+                   img[:,0:upperLeft[0],:]  = np.ones(img[:,0:upperLeft[0],:].shape) *255
+                   img[0:upperLeft[1],:,:]  = np.ones(img[0:upperLeft[1],:,:].shape) *255
+                   img[:,bottomRight[0]:,:] = np.ones(img[:,bottomRight[0]:,:].shape)*255
+                   img[bottomRight[1]:,:,:] = np.ones(img[bottomRight[1]:,:,:].shape)*255
+                   break
 
-        # img, upperLeft, bottomRight, points, center = crop(img, points, center, scale, [self.height, self.width])
+            img, upperLeft, bottomRight, points, center = crop(img, points, center, scale, [self.height, self.width])
 
         kpt = points
+        img, kpt, center = self.transformer(img, points, center)
 
-        # img, kpt, center = self.transformer(img, points, center)
         if img.shape[0] != 368 or img.shape[1] != 368:
             kpt[:,0] = kpt[:,0] * (368/img.shape[1])
             kpt[:,1] = kpt[:,1] * (368/img.shape[0])
