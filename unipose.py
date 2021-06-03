@@ -44,10 +44,10 @@ class Trainer(object):
         self.dataset      = args.dataset
 
 
-        self.workers      = 1
+        self.workers      = 2
         self.weight_decay = 0.0005
         self.momentum     = 0.9
-        self.batch_size   = 4
+        self.batch_size   = 2
         self.lr           = 0.0001
         self.gamma        = 0.333
         self.step_size    = 13275
@@ -56,24 +56,19 @@ class Trainer(object):
 
         cudnn.benchmark   = True
 
-        if self.dataset   ==  "LSP":
-            self.numClasses  = 14
-        elif self.dataset == "MPII":
-            self.numClasses  = 16
+        self.numClasses  = 16
 
         self.train_loader, self.val_loader, self.test_loader = getDataloader(self.dataset, self.train_dir,\
-            self.val_dir, self.test_dir, self.sigma, self.stride, self.workers, self.batch_size)
+                            self.val_dir, self.test_dir, self.sigma, self.stride, self.workers, self.batch_size)
 
-        model = unipose(self.dataset, num_classes=self.numClasses,backbone='resnet',output_stride=16,sync_bn=True,freeze_bn=False, stride=self.stride)
-
-        self.model       = model.cuda()
-
+        self.model = unipose(self.dataset, num_classes = self.numClasses, backbone=self.args.backbone, 
+                            output_stride = 8, sync_bn = True, freeze_bn = False, stride=self.stride)
+        for param in self.model.parameters():
+            param.requires_grad = True
+        self.model       = self.model.cuda()
         self.criterion   = nn.MSELoss()
-
         self.optimizer   = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-
         self.best_model  = 12345678.9
-
         self.iters       = 0
 
         if self.args.pretrained is not None:
@@ -105,8 +100,8 @@ class Trainer(object):
         tbar = tqdm(self.train_loader)
 
         for i, (input, heatmap, centermap, img_path) in enumerate(tbar):
-            learning_rate = adjust_learning_rate(self.optimizer, self.iters, self.lr, policy='step',
-                                                 gamma=self.gamma, step_size=self.step_size)
+            # learning_rate = adjust_learning_rate(self.optimizer, self.iters, self.lr, policy='step',
+            #                                      gamma=self.gamma, step_size=self.step_size)
 
             input_var     =     input.cuda()
             heatmap_var   =    heatmap.cuda()
@@ -128,8 +123,7 @@ class Trainer(object):
 
             self.iters += 1
 
-            if i == 10000:
-            	break
+
 
     def validation(self, epoch):
         self.model.eval()
@@ -258,6 +252,9 @@ parser.add_argument('--val_dir',    type=str, dest='val_dir',       default='./m
 parser.add_argument('--test_dir',   type=str, dest='test_dir',      default='./mpii/')
 parser.add_argument('--model_name', type=str,                       default='unipose')
 parser.add_argument('--model_arch', type=str,                       default='unipose')
+parser.add_argument('--backbone',   type=str, dest='backbone',      default='efficient')
+
+parser.add_argument('--decoder',   type=str, dest='decoder',      default='original')
 
 starter_epoch =   0
 epochs        =  100

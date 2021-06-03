@@ -6,30 +6,47 @@ import torch.nn.functional as F
 class Decoder(nn.Module):
     def __init__(self, dataset, num_classes, backbone, BatchNorm):
         super(Decoder, self).__init__()
-        if backbone == 'resnet':
-            low_level_inplanes = 256
 
+        low_level_inplanes = 32
+        in_channels = 2048
+            
+
+    
         if dataset == "NTID":
             limbsNum = 18
         else:
             limbsNum = 13
 
-        self.conv1 = nn.Conv2d(low_level_inplanes, 48, 1, bias=False)
-        self.bn1 = BatchNorm(48)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv2d(2048, 256, 1, bias=False)
+        self.conv1 = nn.Conv2d(low_level_inplanes, 96, 1, bias=False)
+        self.bn1 = BatchNorm(96)
+        #self.relu = nn.ReLU()
+        self.relu = nn.Hardswish()
+
+        self.conv2 = nn.Conv2d(in_channels, 256, 1, bias=False)
         self.bn2 = BatchNorm(256)
-        self.last_conv = nn.Sequential(nn.Conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
+        self.last_conv = nn.Sequential(nn.Conv2d(352, 256, kernel_size=3, stride=1, padding=1, bias=False),
                                        BatchNorm(256),
-                                       nn.ReLU(),
+                                       # nn.ReLU(),
+                                       nn.Hardswish(),
+                                       
                                        nn.Dropout(0.5),
                                        nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
                                        BatchNorm(256),
-                                       nn.ReLU(),
+                                       # nn.ReLU(),
+                                       nn.Hardswish(),
+                                       
                                        nn.Dropout(0.1),
-                                       nn.Conv2d(256, num_classes+1, kernel_size=1, stride=1))
-#                                        nn.Conv2d(256, num_classes+5+1, kernel_size=1, stride=1)) # Use in case of extacting the bounding box
+                                       # nn.Conv2d(256, num_classes + 1, kernel_size = 1, stride = 1))
+                                       nn.Conv2d(256, num_classes + 1 , kernel_size = 2, stride=2),
+#                                       nn.Hardswish(),
+#                                       nn.MaxPool2d((2,2),stride=2)
+                                       # nn.Conv2d(256, num_classes+5+1, kernel_size=1, stride=1)) # Use in case of extacting the bounding box
+        )
 
+        self.output = nn.Sequential(
+            nn.Dropout(0.1),
+            nn.Linear(256, num_classes+1),
+        )        
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self._init_weight()
@@ -50,7 +67,7 @@ class Decoder(nn.Module):
 
         x = torch.cat((x, low_level_feat), dim=1)
         x = self.last_conv(x)
-
+        # x = self.output(x)
         #x = self.maxpool(x)
 
         return x

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from model.modules.wasp import build_wasp
 from model.modules.decoder import build_decoder
 from model.modules.backbone import build_backbone
+from model.modules.transpose import *
 
 class unipose(nn.Module):
     def __init__(self, dataset, backbone='resnet', output_stride=16, num_classes=21,
@@ -18,11 +19,18 @@ class unipose(nn.Module):
         self.pool_center   = nn.AvgPool2d(kernel_size=9, stride=8, padding=1)
 
         self.backbone      = build_backbone(backbone, output_stride, BatchNorm)
+
         self.wasp          = build_wasp(backbone, output_stride, BatchNorm)
         self.decoder       = build_decoder(dataset, num_classes, backbone, BatchNorm)
 
+
+
+
+
         if freeze_bn:
             self.freeze_bn()
+
+         
 
     def forward(self, input):
         x, low_level_feat = self.backbone(input)

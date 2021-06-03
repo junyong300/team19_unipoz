@@ -4,24 +4,26 @@ import mlconfig
 import torch
 from torch import nn
 
-# from .utils import load_state_dict_from_url
+  
+try:
+    from torch.hub import load_state_dict_from_url
+except ImportError:
+    from torch.utils.model_zoo import load_url as load_state_dict_from_url
 
-# model_urls = {
-#     'efficientnet_b0': 'https://www.dropbox.com/s/9wigibun8n260qm/efficientnet-b0-4cfa50.pth?dl=1',
-#     'efficientnet_b1': 'https://www.dropbox.com/s/6745ear79b1ltkh/efficientnet-b1-ef6aa7.pth?dl=1',
-#     'efficientnet_b2': 'https://www.dropbox.com/s/0dhtv1t5wkjg0iy/efficientnet-b2-7c98aa.pth?dl=1',
-#     'efficientnet_b3': 'https://www.dropbox.com/s/5uqok5gd33fom5p/efficientnet-b3-bdc7f4.pth?dl=1',
-#     'efficientnet_b4': 'https://www.dropbox.com/s/y2nqt750lixs8kc/efficientnet-b4-3e4967.pth?dl=1',
-#     'efficientnet_b5': 'https://www.dropbox.com/s/qxonlu3q02v9i47/efficientnet-b5-4c7978.pth?dl=1',
-#     'efficientnet_b6': None,
-#     'efficientnet_b7': None,
-# }
+
+model_urls = {
+    'efficientnet_b0': 'https://www.dropbox.com/s/9wigibun8n260qm/efficientnet-b0-4cfa50.pth?dl=1',
+    'efficientnet_b1': 'https://www.dropbox.com/s/6745ear79b1ltkh/efficientnet-b1-ef6aa7.pth?dl=1',
+    'efficientnet_b2': 'https://www.dropbox.com/s/0dhtv1t5wkjg0iy/efficientnet-b2-7c98aa.pth?dl=1',
+    'efficientnet_b3': 'https://www.dropbox.com/s/5uqok5gd33fom5p/efficientnet-b3-bdc7f4.pth?dl=1',
+    'efficientnet_b4': 'https://www.dropbox.com/s/y2nqt750lixs8kc/efficientnet-b4-3e4967.pth?dl=1',
+    'efficientnet_b5': 'https://www.dropbox.com/s/qxonlu3q02v9i47/efficientnet-b5-4c7978.pth?dl=1',
+    'efficientnet_b6': None,
+    'efficientnet_b7': None,
+}
 
 params = {
     'efficientnet_b0': (1.0, 1.0, 224, 0.2),
-    
-    #'efficientnet_b0': (1.4, 1.8, 380, 0.4),
-
     'efficientnet_b1': (1.0, 1.1, 240, 0.2),
     'efficientnet_b2': (1.1, 1.2, 260, 0.3),
     'efficientnet_b3': (1.2, 1.4, 300, 0.3),
@@ -164,7 +166,7 @@ class EfficientNet(nn.Module):
         ]
         # yapf: enable
 
-        out_channels = _round_filters(16, width_mult)
+        out_channels = _round_filters(32, width_mult)
         features = [ConvBNReLU(3, out_channels, 3, stride=2)]
 
         in_channels = out_channels
@@ -179,22 +181,13 @@ class EfficientNet(nn.Module):
         last_channels = _round_filters(1280, width_mult)
         features += [ConvBNReLU(in_channels, last_channels, 1)]
 
-
-        feat0 = features[:2]
-
-        feat1 = features[2:]
-
-        self.feat0 = nn.Sequential(*feat0)
-        self.feat1 = nn.Sequential(*feat1)
-
-        
+       
 
         self.features = nn.Sequential(*features)
         self.classifier = nn.Sequential(
             nn.Dropout(dropout_rate),
             nn.Linear(last_channels, num_classes),
         )
-        del self.features 
 
 
         # weight initialization
@@ -215,25 +208,24 @@ class EfficientNet(nn.Module):
 
     def forward(self, x):
 
-        x = self.feat0(x)
+        x = self.features[0](x)
         low_level_feat = x
-        x = self.feat1(x)
-        # print(x.shape)
-        # print(low_level_feat.shape)
+        x = self.features[1:](x)
+
         return x , low_level_feat
 
 
 def _efficientnet(arch, pretrained, progress, **kwargs):
     width_mult, depth_mult, _, dropout_rate = params[arch]
     model = EfficientNet(width_mult, depth_mult, dropout_rate, **kwargs)
-    # if pretrained:
-    #     # state_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
+    if pretrained:
+        state_dict = load_state_dict_from_url(model_urls[arch],model_dir="./", progress=progress)
 
-    #     if 'num_classes' in kwargs and kwargs['num_classes'] != 1000:
-    #         del state_dict['classifier.1.weight']
-    #         del state_dict['classifier.1.bias']
+        if 'num_classes' in kwargs and kwargs['num_classes'] != 1000:
+            del state_dict['classifier.1.weight']
+            del state_dict['classifier.1.bias']
 
-    #     model.load_state_dict(state_dict, strict=False)
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 

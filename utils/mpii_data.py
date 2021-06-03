@@ -116,7 +116,7 @@ class mpii(data.Dataset):
         self.full_img_List = {}
         self.numPeople     = []
 
-        with open(os.path.join(self.labels_dir, "mpii_new.json")) as anno_file:
+        with open(os.path.join(self.labels_dir, "mpii_yolo.json")) as anno_file:
             self.anno = json.load(anno_file)
 
         self.train_list = []
@@ -160,7 +160,8 @@ class mpii(data.Dataset):
         ''' New bounding box from mpii_new.json'''
         
         # print(variable)
-        bbox = variable['bbox']
+
+        bbox = variable.get('bbox')
         points   = torch.Tensor(variable['joint_self'])
 
         nParts = points.size(0)
