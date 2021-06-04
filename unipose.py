@@ -29,7 +29,6 @@ from tqdm import tqdm
 
 import torch.nn.functional as F
 from collections import OrderedDict
-from torchsummary import summary
 
 from PIL import Image
 
