@@ -22,7 +22,7 @@ from utils.utils import AverageMeter         as AverageMeter
 from utils.utils import draw_paint           as draw_paint
 from utils       import evaluate             as evaluate
 from utils.utils import get_kpts             as get_kpts
-
+from torch.utils.tensorboard import SummaryWriter
 from model.unipose import unipose
 
 from tqdm import tqdm
@@ -42,7 +42,7 @@ class Trainer(object):
         self.test_dir     = args.test_dir
         self.model_arch   = args.model_arch
         self.dataset      = args.dataset
-
+        self.writer = SummaryWriter()
 
         self.workers      = 1
         self.weight_decay = 0.0005
@@ -125,11 +125,11 @@ class Trainer(object):
             self.optimizer.step()
 
             tbar.set_description('Train loss: %.6f' % (train_loss / ((i + 1)*self.batch_size)))
-
             self.iters += 1
 
             if i == 10000:
-            	break
+                self.writer.add_scalar("Loss/train", train_loss, epoch)
+                break
 
     def validation(self, epoch):
         self.model.eval()
@@ -159,7 +159,7 @@ class Trainer(object):
                 val_loss += loss_heat.item()
 
                 tbar.set_description('Val   loss: %.6f' % (val_loss / ((i + 1)*self.batch_size)))
-
+                self.writer.add_scalar("Valid/train", loss, epoch * 10000 + i)
                 acc, acc_PCK, acc_PCKh, cnt, pred, visible = evaluate.accuracy(heat.detach().cpu().numpy(), heatmap_var.detach().cpu().numpy(),0.2,0.5, self.dataset)
 
                 AP[0]     = (AP[0]  *i + acc[0])      / (i + 1)
@@ -176,7 +176,12 @@ class Trainer(object):
                 mAP     =   AP[1:].sum()/(self.numClasses)
                 mPCK    =  PCK[1:].sum()/(self.numClasses)
                 mPCKh   = PCKh[1:].sum()/(self.numClasses)
-	
+            self.writer.add_scalar("Loss/valid", val_loss, epoch)
+            self.writer.add_scalar("PCKh/valid", PCKh, epoch)
+            self.writer.add_scalar("mAP/valid", mAP, epoch)
+            self.writer.add_scalar("AP/valid", AP, epoch)
+            self.writer.add_scalar("mPCK/valid", mPCK, epoch)
+            self.writer.add_scalr("PCK/valid",PCK,epoch)
             printAccuracies(mAP, AP, mPCKh, PCKh, mPCK, PCK, self.dataset)
                 
             PCKhAvg = PCKh.sum()/(self.numClasses+1)
@@ -277,6 +282,6 @@ trainer = Trainer(args)
 for epoch in range(starter_epoch, epochs):
     trainer.training(epoch)
     trainer.validation(epoch)
-	
+trainer.writer.close()
 # Uncomment for inference, demo, and samples for the trained model:
 # trainer.test('./mpii/images/065687330.jpg',0)
