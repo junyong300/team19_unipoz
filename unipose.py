@@ -126,10 +126,9 @@ class Trainer(object):
 
             tbar.set_description('Train loss: %.6f' % (train_loss / ((i + 1)*self.batch_size)))
             self.iters += 1
-
             if i == 10000:
-                self.writer.add_scalar("Loss/train", train_loss, epoch)
                 break
+        self.writer.add_scalar("Loss/train", (train_loss / ((i + 1)*self.batch_size)), epoch)
 
     def validation(self, epoch):
         self.model.eval()
@@ -176,12 +175,10 @@ class Trainer(object):
                 mAP     =   AP[1:].sum()/(self.numClasses)
                 mPCK    =  PCK[1:].sum()/(self.numClasses)
                 mPCKh   = PCKh[1:].sum()/(self.numClasses)
-            self.writer.add_scalar("Loss/valid", val_loss, epoch)
-            self.writer.add_scalar("PCKh/valid", PCKh, epoch)
+            self.writer.add_scalar("Loss/valid", (val_loss / ((i + 1)*self.batch_size)), epoch)
+            self.writer.add_scalar("mPCKh/valid", mPCKh, epoch)
             self.writer.add_scalar("mAP/valid", mAP, epoch)
-            self.writer.add_scalar("AP/valid", AP, epoch)
             self.writer.add_scalar("mPCK/valid", mPCK, epoch)
-            self.writer.add_scalr("PCK/valid",PCK,epoch)
             printAccuracies(mAP, AP, mPCKh, PCKh, mPCK, PCK, self.dataset)
                 
             PCKhAvg = PCKh.sum()/(self.numClasses+1)
