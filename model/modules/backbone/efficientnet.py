@@ -232,3 +232,7 @@ def _efficientnet(arch, pretrained, progress, **kwargs):
 @mlconfig.register
 def efficientnet_b0(pretrained=False, progress=True, **kwargs):
     return _efficientnet('efficientnet_b0', pretrained, progress, **kwargs)
+
+@mlconfig.register
+def efficientnet_b4(pretrained=False, progress=True, **kwargs):
+    return _efficientnet('efficientnet_b4', pretrained, progress, **kwargs)

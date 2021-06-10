@@ -9,8 +9,8 @@ class _AtrousModule(nn.Module):
         self.atrous_conv = nn.Conv2d(inplanes, planes, kernel_size=kernel_size,
                                             stride=1, padding=padding, dilation=dilation, bias=False)
         self.bn = BatchNorm(planes)
-        # self.relu = nn.ReLU()
-        self.relu = nn.Hardswish()
+        self.relu = nn.ReLU()
+        # self.relu = nn.Hardswish()
 
         self._init_weight()
 
@@ -34,9 +34,18 @@ class _AtrousModule(nn.Module):
 class wasp(nn.Module):
     def __init__(self, backbone, output_stride, BatchNorm):
         super(wasp, self).__init__()
+        if backbone == 'efficient':
+            in_channels = 1280
+            inplanes = 1280
+        elif backbone == 'efficientb4':
+            in_channels = 1280
+            inplanes = 1792
+        else:
+            in_channels = 1280
+            inplanes = 2048
+
         
-        inplanes = 1280
-        
+            
         if output_stride == 16:
             #dilations = [ 6, 12, 18, 24]
             dilations = [24, 18, 12,  6]
@@ -58,14 +67,11 @@ class wasp(nn.Module):
                                              nn.Hardswish()
                                              )
 
-        # self.global_avg_pool = nn.Sequential(nn.Conv2d(inplanes, 256, 1, stride=1, bias=False),
-        #                                      nn.BatchNorm2d(256),
-        #                                      nn.ReLU())
-        self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, 256, 1, bias=False)
         self.conv2 = nn.Conv2d(256,256,1,bias=False)
         self.bn1 = BatchNorm(256)
-        # self.relu = nn.ReLU()
-        self.relu = nn.Hardswish()
+        self.relu = nn.ReLU()
+        # self.relu = nn.Hardswish()
 
         self.dropout = nn.Dropout(0.5)
         self._init_weight()

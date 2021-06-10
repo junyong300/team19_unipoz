@@ -6,6 +6,8 @@ def build_backbone(backbone, output_stride, BatchNorm):
         return resnet.ResNet101(output_stride, BatchNorm)
     if backbone == 'efficient':
         return _efficientnet('efficientnet_b0',True,True)
+    if backbone == 'efficientb4':
+        return _efficientnet('efficientnet_b4',True,True)
     else:
         raise NotImplementedError
         

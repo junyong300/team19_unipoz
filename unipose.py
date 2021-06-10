@@ -22,6 +22,7 @@ from utils.utils import AverageMeter         as AverageMeter
 from utils.utils import draw_paint           as draw_paint
 from utils       import evaluate             as evaluate
 from utils.utils import get_kpts             as get_kpts
+from torch.utils.tensorboard import SummaryWriter
 
 from model.unipose import unipose
 
@@ -34,6 +35,7 @@ from PIL import Image
 
 
 class Trainer(object):
+
     def __init__(self, args):
         self.args         = args
         self.train_dir    = args.train_dir
@@ -42,11 +44,11 @@ class Trainer(object):
         self.model_arch   = args.model_arch
         self.dataset      = args.dataset
 
-
-        self.workers      = 2
+        self.writer       = SummaryWriter()
+        self.workers      = 4
         self.weight_decay = 0.0005
         self.momentum     = 0.9
-        self.batch_size   = 2
+        self.batch_size   = 8
         self.lr           = 0.0001
         self.gamma        = 0.333
         self.step_size    = 13275
@@ -122,6 +124,8 @@ class Trainer(object):
 
             self.iters += 1
 
+        self.writer.add_scalar("Loss/train", (train_loss / ((i + 1)*self.batch_size)), epoch)
+
 
 
     def validation(self, epoch):
@@ -152,6 +156,8 @@ class Trainer(object):
                 val_loss += loss_heat.item()
 
                 tbar.set_description('Val   loss: %.6f' % (val_loss / ((i + 1)*self.batch_size)))
+                #self.writer.add_scalar("Valid/train", val_loss, epoch * 10000 + i)
+                self.writer.add_scalar("Valid/train", loss, epoch * 10000 + i)
 
                 acc, acc_PCK, acc_PCKh, cnt, pred, visible = evaluate.accuracy(heat.detach().cpu().numpy(), heatmap_var.detach().cpu().numpy(),0.2,0.5, self.dataset)
 
@@ -169,23 +175,28 @@ class Trainer(object):
                 mAP     =   AP[1:].sum()/(self.numClasses)
                 mPCK    =  PCK[1:].sum()/(self.numClasses)
                 mPCKh   = PCKh[1:].sum()/(self.numClasses)
-	
-            printAccuracies(mAP, AP, mPCKh, PCKh, mPCK, PCK, self.dataset)
-                
-            PCKhAvg = PCKh.sum()/(self.numClasses+1)
-            PCKAvg  =  PCK.sum()/(self.numClasses+1)
 
-            if mAP > self.isBest:
-                self.isBest = mAP
-                save_checkpoint({'state_dict': self.model.state_dict()}, self.isBest, self.args.model_name)
-                print("Model saved to "+self.args.model_name)
 
-            if mPCKh > self.bestPCKh:
-                self.bestPCKh = mPCKh
-            if mPCK > self.bestPCK:
-                self.bestPCK = mPCK
+        self.writer.add_scalar("Loss/valid", val_loss, epoch)
+        self.writer.add_scalar("mPCKh/valid", mPCKh, epoch)
+        self.writer.add_scalar("mAP/valid", mAP, epoch)
+        self.writer.add_scalar("mPCK/valid", mPCK, epoch)
+        printAccuracies(mAP, AP, mPCKh, PCKh, mPCK, PCK, self.dataset)
+            
+        PCKhAvg = PCKh.sum()/(self.numClasses+1)
+        PCKAvg  =  PCK.sum()/(self.numClasses+1)
 
-            print("Best AP = %.2f%%; PCK = %2.2f%%; PCKh = %2.2f%%" % (self.isBest*100, self.bestPCK*100,self.bestPCKh*100))
+        if mAP > self.isBest:
+            self.isBest = mAP
+            save_checkpoint({'state_dict': self.model.state_dict()}, self.isBest, self.args.model_name)
+            print("Model saved to "+self.args.model_name)
+
+        if mPCKh > self.bestPCKh:
+            self.bestPCKh = mPCKh
+        if mPCK > self.bestPCK:
+            self.bestPCK = mPCK
+
+        print("Best AP = %.2f%%; PCK = %2.2f%%; PCKh = %2.2f%%" % (self.isBest*100, self.bestPCK*100,self.bestPCKh*100))
             
 
 
@@ -251,12 +262,11 @@ parser.add_argument('--val_dir',    type=str, dest='val_dir',       default='./m
 parser.add_argument('--test_dir',   type=str, dest='test_dir',      default='./mpii/')
 parser.add_argument('--model_name', type=str,                       default='unipose')
 parser.add_argument('--model_arch', type=str,                       default='unipose')
-parser.add_argument('--backbone',   type=str, dest='backbone',      default='efficient')
+parser.add_argument('--backbone',   type=str, dest='backbone',      default='efficientb4')
 
-parser.add_argument('--decoder',   type=str, dest='decoder',      default='original')
 
 starter_epoch =   0
-epochs        =  100
+epochs        =  40
 
 args = parser.parse_args()
 
